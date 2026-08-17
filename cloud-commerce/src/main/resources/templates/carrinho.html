@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR"
+      xmlns:th="http://www.thymeleaf.org">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Carrinho - Cloud Store</title>
+
+    <link rel="stylesheet"
+          th:href="@{/css/style.css}">
+
+</head>
+
+<body>
+
+<header class="navbar">
+
+    <div class="logo">
+        ☁️ Cloud Store
+    </div>
+
+    <nav>
+
+        <a th:href="@{/}">
+            Home
+        </a>
+
+        <a th:href="@{/estoque}">
+            Produtos
+        </a>
+
+        <a th:href="@{/pedidos}">
+            Pedidos
+        </a>
+
+    </nav>
+
+    <a th:href="@{/carrinho}"
+       class="cart-button">
+
+        🛒 Carrinho
+
+    </a>
+
+</header>
+
+
+<main>
+
+    <h1>
+        Meu Carrinho 🛒
+    </h1>
+
+    <div id="cart-list"
+         class="cart-list">
+
+    </div>
+
+
+    <div class="cart-summary">
+
+        <h2>
+
+            Total:
+
+            R$
+
+            <span id="cart-total">
+                0.00
+            </span>
+
+        </h2>
+
+
+        <button
+                class="primary-button"
+                onclick="finalizarPedido()">
+
+            Finalizar pedido
+
+        </button>
+
+    </div>
+
+</main>
+
+
+<script th:src="@{/js/app.js}"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,405 @@
+* {
+    box-sizing: border-box;
+}
+
+
+body {
+
+    margin: 0;
+
+    font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+
+    background: #f5f7fa;
+
+    color: #1f2937;
+}
+
+
+.navbar {
+
+    height: 70px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    padding: 0 40px;
+
+    background: #111827;
+
+    color: white;
+}
+
+
+.logo {
+
+    font-size: 20px;
+
+    font-weight: bold;
+}
+
+
+nav {
+
+    display: flex;
+
+    gap: 25px;
+}
+
+
+nav a {
+
+    color: white;
+
+    text-decoration: none;
+
+    font-weight: 500;
+}
+
+
+.cart-button {
+
+    color: white;
+
+    text-decoration: none;
+
+    background: #2563eb;
+
+    padding: 10px 15px;
+
+    border-radius: 8px;
+}
+
+
+#cart-count {
+
+    background: white;
+
+    color: #2563eb;
+
+    padding: 2px 7px;
+
+    border-radius: 50%;
+
+    margin-left: 5px;
+}
+
+
+main {
+
+    max-width: 1200px;
+
+    margin: 40px auto;
+
+    padding: 0 20px;
+}
+
+
+.hero {
+
+    text-align: center;
+
+    padding: 70px 20px;
+
+    background: white;
+
+    border-radius: 12px;
+
+    margin-bottom: 40px;
+}
+
+
+.hero h1 {
+
+    font-size: 42px;
+
+    margin-bottom: 15px;
+}
+
+
+.hero p {
+
+    color: #6b7280;
+
+    margin-bottom: 30px;
+}
+
+
+.primary-button {
+
+    display: inline-block;
+
+    border: none;
+
+    background: #2563eb;
+
+    color: white;
+
+    padding: 12px 20px;
+
+    border-radius: 8px;
+
+    text-decoration: none;
+
+    cursor: pointer;
+
+    font-size: 15px;
+}
+
+
+.product-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(240px, 1fr)
+        );
+
+    gap: 25px;
+}
+
+
+.product-card {
+
+    background: white;
+
+    border-radius: 12px;
+
+    overflow: hidden;
+
+    box-shadow:
+            0 2px 8px
+            rgba(0, 0, 0, 0.08);
+}
+
+
+.product-card img {
+
+    width: 100%;
+
+    height: 180px;
+
+    object-fit: cover;
+}
+
+
+.product-content {
+
+    padding: 20px;
+}
+
+
+.product-content h3 {
+
+    margin-top: 0;
+}
+
+
+.product-content p {
+
+    color: #6b7280;
+
+    min-height: 45px;
+}
+
+
+.product-content strong {
+
+    display: block;
+
+    font-size: 20px;
+
+    margin: 15px 0;
+}
+
+
+.product-content button {
+
+    width: 100%;
+
+    border: none;
+
+    padding: 12px;
+
+    background: #111827;
+
+    color: white;
+
+    border-radius: 7px;
+
+    cursor: pointer;
+}
+
+
+table {
+
+    width: 100%;
+
+    background: white;
+
+    border-collapse: collapse;
+
+    margin-top: 25px;
+
+    border-radius: 10px;
+
+    overflow: hidden;
+}
+
+
+th,
+td {
+
+    padding: 15px;
+
+    text-align: left;
+
+    border-bottom:
+            1px solid #e5e7eb;
+}
+
+
+th {
+
+    background: #111827;
+
+    color: white;
+}
+
+
+.low-stock {
+
+    color: #dc2626;
+
+    font-weight: bold;
+}
+
+
+.cart-list {
+
+    background: white;
+
+    border-radius: 10px;
+}
+
+
+.cart-item {
+
+    display: grid;
+
+    grid-template-columns:
+        1fr
+        auto
+        auto;
+
+    align-items: center;
+
+    gap: 30px;
+
+    padding: 20px;
+
+    border-bottom:
+            1px solid #e5e7eb;
+}
+
+
+.quantity {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 15px;
+}
+
+
+.quantity button {
+
+    width: 30px;
+
+    height: 30px;
+
+    border: none;
+
+    border-radius: 5px;
+
+    cursor: pointer;
+}
+
+
+.cart-summary {
+
+    margin-top: 25px;
+
+    text-align: right;
+}
+
+
+.order-card {
+
+    display: grid;
+
+    grid-template-columns:
+        1fr
+        auto
+        auto;
+
+    align-items: center;
+
+    gap: 30px;
+
+    background: white;
+
+    padding: 20px;
+
+    margin-bottom: 15px;
+
+    border-radius: 10px;
+}
+
+
+.status {
+
+    padding: 7px 12px;
+
+    border-radius: 20px;
+
+    font-size: 13px;
+
+    font-weight: bold;
+}
+
+
+.status.finalizado {
+
+    background: #dcfce7;
+
+    color: #166534;
+}
+
+
+.status.processando {
+
+    background: #fef3c7;
+
+    color: #92400e;
+}
+
+
+.empty {
+
+    text-align: center;
+
+    background: white;
+
+    padding: 60px;
+
+    border-radius: 10px;
+}

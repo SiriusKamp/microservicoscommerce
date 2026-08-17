@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="pt-BR"
+      xmlns:th="http://www.thymeleaf.org">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Produtos - Cloud Store</title>
+
+    <link rel="stylesheet"
+          th:href="@{/css/style.css}">
+
+</head>
+
+<body>
+
+<header class="navbar">
+
+    <div class="logo">
+        ☁️ Cloud Store
+    </div>
+
+    <nav>
+
+        <a th:href="@{/}">
+            Home
+        </a>
+
+        <a th:href="@{/estoque}">
+            Produtos
+        </a>
+
+        <a th:href="@{/pedidos}">
+            Pedidos
+        </a>
+
+    </nav>
+
+    <a th:href="@{/carrinho}"
+       class="cart-button">
+
+        🛒 Carrinho
+
+    </a>
+
+</header>
+
+
+<main>
+
+    <h1>
+        Produtos
+    </h1>
+
+    <div id="product-grid"
+         class="product-grid">
+
+        <p>
+            Carregando produtos...
+        </p>
+
+    </div>
+
+</main>
+
+
+<script th:src="@{/js/app.js}"></script>
+
+<script>
+
+    const PRODUTO_API = "http://localhost:8082";
+    const ESTOQUE_API = "http://localhost:8083";
+
+
+    async function carregarProdutos() {
+
+        try {
+
+            const respostaProdutos =
+                await fetch(PRODUTO_API + "/produtos");
+
+            if (!respostaProdutos.ok) {
+                throw new Error(
+                    "Erro ao buscar produtos"
+                );
+            }
+
+            const produtos =
+                await respostaProdutos.json();
+
+
+            const respostaEstoque =
+                await fetch(ESTOQUE_API + "/estoque");
+
+            if (!respostaEstoque.ok) {
+                throw new Error(
+                    "Erro ao buscar estoque"
+                );
+            }
+
+            const estoques =
+                await respostaEstoque.json();
+
+
+            const lista =
+                document.getElementById("product-grid");
+
+
+            lista.innerHTML = "";
+
+
+            produtos.forEach(produto => {
+
+                const estoque =
+                    estoques.find(
+                        item =>
+                            item.idProduto === produto.id
+                    );
+
+
+                const quantidade =
+                    estoque
+                        ? estoque.quantidade
+                        : 0;
+
+
+                const card =
+                    document.createElement("div");
+
+                card.classList.add(
+                    "product-card"
+                );
+
+
+                card.innerHTML = `
+
+                    <div class="product-content">
+
+                        <h3>
+                            ${produto.nome}
+                        </h3>
+
+                        <p>
+                            ${produto.descricao}
+                        </p>
+
+                        <strong>
+                            R$ ${Number(produto.preco)
+                    .toFixed(2)}
+                        </strong>
+
+                        <p>
+
+                            Categoria:
+
+                            ${produto.categoria}
+
+                        </p>
+
+                        <p>
+
+                            Estoque:
+
+                            <span>
+                                ${quantidade}
+                            </span>
+
+                        </p>
+
+                        <button
+                            class="primary-button"
+                            onclick='adicionarAoCarrinho(
+                                ${JSON.stringify(produto)}
+                            )'
+                            ${quantidade <= 0 ? "disabled" : ""}>
+
+                            🛒 Pedir
+
+                        </button>
+
+                    </div>
+
+                `;
+
+
+                lista.appendChild(card);
+
+            });
+
+        } catch (erro) {
+
+            console.error(erro);
+
+            document.getElementById(
+                "product-grid"
+            ).innerHTML = `
+
+                <p>
+                    Não foi possível carregar
+                    os produtos.
+                </p>
+
+            `;
+
+        }
+
+    }
+
+
+    function adicionarAoCarrinho(produto) {
+
+        const carrinho =
+            obterCarrinho();
+
+
+        const itemExistente =
+            carrinho.find(
+                item =>
+                    item.id === produto.id
+            );
+
+
+        if (itemExistente) {
+
+            itemExistente.quantidade++;
+
+        } else {
+
+            carrinho.push({
+
+                id: produto.id,
+
+                nome: produto.nome,
+
+                preco: Number(produto.preco),
+
+                descricao: produto.descricao,
+
+                categoria: produto.categoria,
+
+                quantidade: 1
+
+            });
+
+        }
+
+
+        salvarCarrinho(carrinho);
+
+
+        alert(
+            produto.nome +
+            " foi adicionado ao carrinho!"
+        );
+
+    }
+
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        carregarProdutos
+    );
+
+</script>
+
+</body>
+
+</html>
