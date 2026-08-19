@@ -1,5 +1,6 @@
 package com.cloudcommerce.pedido.controller;
 
+import com.cloudcommerce.pedido.dto.PedidoResponse;
 import com.cloudcommerce.pedido.model.Pedido;
 import com.cloudcommerce.pedido.repository.PedidoRepository;
 import org.springframework.http.ResponseEntity;
@@ -19,14 +20,18 @@ public class PedidoController {
     }
 
     @GetMapping
-    public List<Pedido> listar() {
-        return pedidoRepository.findAll();
+    public List<PedidoResponse> listar() {
+        return pedidoRepository.findAll()
+                .stream()
+                .map(PedidoResponse::from)
+                .toList();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Pedido> buscar(@PathVariable Long id) {
+    public ResponseEntity<PedidoResponse> buscar(@PathVariable Long id) {
 
         return pedidoRepository.findById(id)
+                .map(PedidoResponse::from)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

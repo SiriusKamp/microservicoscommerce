@@ -31,15 +31,28 @@ async function carregarProdutos() {
         // BUSCAR ESTOQUE
         // ==============================
 
-        const respostaEstoque =
-            await fetch(`${ESTOQUE_SERVICE}/estoque`);
+        let estoques = [];
 
-        if (!respostaEstoque.ok) {
-            throw new Error("Erro ao buscar estoque");
+        try {
+
+            const respostaEstoque =
+                await fetch(`${ESTOQUE_SERVICE}/estoque`);
+
+            if (!respostaEstoque.ok) {
+                throw new Error("Erro ao buscar estoque");
+            }
+
+            estoques =
+                await respostaEstoque.json();
+
+        } catch (erroEstoque) {
+
+            console.warn(
+                "Estoque indisponível. Produtos serão exibidos com estoque 0.",
+                erroEstoque
+            );
+
         }
-
-        const estoques =
-            await respostaEstoque.json();
 
 
         console.log("PRODUTOS:", produtos);
@@ -170,7 +183,8 @@ function criarCardProduto(
                 data-preco="${produto.preco}"
                 data-descricao="${produto.descricao}"
                 data-categoria="${produto.categoria}"
-                onclick="adicionarAoCarrinho(this)">
+                onclick="adicionarAoCarrinho(this)"
+                ${quantidadeEstoque <= 0 ? "disabled" : ""}>
 
                 🛒 Pedir
 

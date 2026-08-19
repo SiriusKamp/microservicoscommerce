@@ -57,64 +57,11 @@
     </h1>
 
 
-    <div class="orders">
+    <div id="orders-list"
+         class="orders">
 
-        <div class="order-card"
-             th:each="pedido : ${pedidos}">
-
-            <div>
-
-                <h3>
-
-                    Pedido #
-
-                    <span th:text="${pedido.id}">
-                        000
-                    </span>
-
-                </h3>
-
-                <p>
-
-                    Data:
-
-                    <span th:text="${#temporals.format(
-                        pedido.data,
-                        'dd/MM/yyyy'
-                    )}">
-                        00/00/0000
-                    </span>
-
-                </p>
-
-            </div>
-
-
-            <span class="status"
-                  th:classappend="${pedido.status == 'FINALIZADO'}
-                    ? ' finalizado'
-                    : ' processando'"
-                  th:text="${pedido.status}">
-
-                STATUS
-
-            </span>
-
-
-            <strong>
-
-                R$
-
-                <span th:text="${#numbers.formatDecimal(
-                    pedido.valorTotal,
-                    1,
-                    2
-                )}">
-                    0.00
-                </span>
-
-            </strong>
-
+        <div class="empty">
+            Carregando pedidos...
         </div>
 
     </div>
@@ -123,6 +70,7 @@
 
 
 <script th:src="@{/js/app.js}"></script>
+<script th:src="@{/js/pedidos.js}"></script>
 
 </body>
 
