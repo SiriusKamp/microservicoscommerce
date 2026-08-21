@@ -3,93 +3,126 @@
       xmlns:th="http://www.thymeleaf.org">
 
 <head>
-
     <meta charset="UTF-8">
 
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0">
 
-    <title>Carrinho - Cloud Store</title>
+    <title>Carrinho - Cloud Commerce</title>
+
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 
     <link rel="stylesheet"
           th:href="@{/css/style.css}">
-
 </head>
 
 <body>
 
-<header class="navbar">
+<header>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-primary border-3">
+        <div class="container">
+            <a class="navbar-brand fw-semibold"
+               th:href="@{/}">
+                Cloud Commerce
+            </a>
 
-    <div class="logo">
-        ☁️ Cloud Store
-    </div>
+            <button class="navbar-toggler"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#navbarPrincipal"
+                    aria-controls="navbarPrincipal"
+                    aria-expanded="false"
+                    aria-label="Abrir menu">
+                <span class="navbar-toggler-icon"></span>
+            </button>
 
-    <nav>
+            <div id="navbarPrincipal"
+                 class="collapse navbar-collapse">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           th:href="@{/}">
+                            Home
+                        </a>
+                    </li>
 
-        <a th:href="@{/}">
-            Home
-        </a>
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           th:href="@{/estoque}">
+                            Produtos
+                        </a>
+                    </li>
 
-        <a th:href="@{/estoque}">
-            Produtos
-        </a>
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           th:href="@{/pedidos}">
+                            Pedidos
+                        </a>
+                    </li>
+                </ul>
 
-        <a th:href="@{/pedidos}">
-            Pedidos
-        </a>
-
+                <a class="btn btn-primary btn-sm active"
+                   aria-current="page"
+                   th:href="@{/carrinho}">
+                    Carrinho
+                    <span id="cart-count"
+                          class="badge text-bg-light ms-2">
+                        0
+                    </span>
+                </a>
+            </div>
+        </div>
     </nav>
-
-    <a th:href="@{/carrinho}"
-       class="cart-button">
-
-        🛒 Carrinho
-
-    </a>
-
 </header>
 
+<main class="container py-5">
+    <section class="page-header mb-4">
+        <p class="section-eyebrow text-primary fw-semibold mb-2">
+            Compra local
+        </p>
 
-<main>
+        <h1 class="display-6 fw-bold mb-2">
+            Meu carrinho
+        </h1>
 
-    <h1>
-        Meu Carrinho 🛒
-    </h1>
+        <p class="text-secondary mb-0">
+            Itens salvos no navegador para simular sessões independentes.
+        </p>
+    </section>
 
-    <div id="cart-list"
-         class="cart-list">
+    <section class="row g-4 align-items-start"
+             aria-label="Resumo do carrinho">
+        <div class="col-lg-8">
+            <div id="cart-list"
+                 class="vstack gap-3">
+            </div>
+        </div>
 
-    </div>
+        <aside class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <p class="text-secondary mb-1">
+                        Total
+                    </p>
 
+                    <p id="cart-total"
+                       class="h3 fw-bold mb-4">
+                        R$ 0,00
+                    </p>
 
-    <div class="cart-summary">
-
-        <h2>
-
-            Total:
-
-            R$
-
-            <span id="cart-total">
-                0.00
-            </span>
-
-        </h2>
-
-
-        <button
-                class="primary-button"
-                onclick="finalizarPedido()">
-
-            Finalizar pedido
-
-        </button>
-
-    </div>
-
+                    <button class="btn btn-primary w-100"
+                            type="button"
+                            onclick="finalizarPedido()">
+                        Finalizar pedido
+                    </button>
+                </div>
+            </div>
+        </aside>
+    </section>
 </main>
 
-
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script th:src="@{/js/app.js}"></script>
 
 </body>

@@ -33,6 +33,93 @@ Fluxo desejado nesta etapa:
 
 ## Histórico de mudanças
 
+### 2026-08-21 - Toast Bootstrap ao adicionar produto no carrinho
+
+#### Objetivo
+
+Melhorar a experiência ao adicionar produtos no carrinho, substituindo o `alert()` bloqueante do navegador por uma notificação visual integrada ao Bootstrap.
+
+#### Arquivos alterados
+
+- `cloud-commerce/src/main/resources/static/js/app.js`
+
+#### O que foi alterado
+
+1. A função `adicionarAoCarrinho` deixou de chamar `alert()` diretamente.
+2. Foi criada a função `mostrarToastCarrinho`.
+3. Foi criada a função `obterContainerToast`, que adiciona dinamicamente o container de toasts na página.
+4. O toast mostra:
+   - título da ação;
+   - mensagem com o nome do produto;
+   - botão para abrir o carrinho.
+5. Foi mantido fallback para `alert()` caso o Bootstrap não esteja disponível.
+
+#### Validação realizada
+
+- `node --check` executado com sucesso em `app.js`.
+- `git diff --check` executado sem erros de whitespace no arquivo alterado.
+
+### 2026-08-21 - Padronização visual com Bootstrap e limpeza do front
+
+#### Objetivo
+
+Melhorar a experiência visual do front e deixar HTML, CSS e JavaScript mais legíveis para estudo.
+
+#### Contexto
+
+As telas estavam funcionando de forma simples, mas cada uma tinha marcação própria, classes CSS antigas e scripts com comentários muito grandes. Para estudar o projeto com mais clareza, a camada de front precisava ficar mais organizada e previsível.
+
+#### Arquivos alterados
+
+- `cloud-commerce/src/main/resources/templates/home.html`
+- `cloud-commerce/src/main/resources/templates/estoque.html`
+- `cloud-commerce/src/main/resources/templates/pedidos.html`
+- `cloud-commerce/src/main/resources/templates/carrinho.html`
+- `cloud-commerce/src/main/resources/static/css/style.css`
+- `cloud-commerce/src/main/resources/static/js/app.js`
+- `cloud-commerce/src/main/resources/static/js/estoque.js`
+- `cloud-commerce/src/main/resources/static/js/pedidos.js`
+
+#### O que foi alterado
+
+1. As quatro páginas passaram a carregar Bootstrap via CDN.
+2. A navegação foi padronizada com `navbar` responsiva do Bootstrap.
+3. O contador do carrinho passou a aparecer no header das páginas.
+4. A home virou um painel de acompanhamento do projeto, mostrando os serviços já conectados.
+5. A tela de produtos passou a renderizar cards Bootstrap com status de estoque.
+6. A tela de pedidos passou a renderizar cards Bootstrap com status, data, total e quantidade de itens.
+7. A tela de carrinho passou a usar layout em duas colunas, com lista de itens e resumo lateral.
+8. O CSS local foi reduzido para personalizações pequenas sobre o Bootstrap.
+9. `app.js` foi reorganizado para concentrar carrinho, totalização e formatação de moeda.
+10. `estoque.js` foi separado em funções de busca, mapeamento de estoque e renderização.
+11. `pedidos.js` foi separado em funções de busca, renderização, status e formatação de data.
+
+#### Validação realizada
+
+- `git diff --check` executado sem erros de whitespace.
+- `node --check` executado com sucesso para:
+  - `app.js`;
+  - `estoque.js`;
+  - `pedidos.js`.
+- Busca por classes antigas do layout anterior não encontrou referências restantes relevantes.
+
+#### Observações
+
+O Bootstrap está sendo carregado por CDN:
+
+- CSS: `https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css`
+- JS: `https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js`
+
+Isso facilita a etapa de estudo sem alterar o build Maven. Em uma etapa futura com Docker/AWS, pode fazer sentido empacotar assets localmente ou usar um processo de build do front.
+
+#### Próximos passos recomendados
+
+1. Subir o front e navegar pelas quatro telas.
+2. Testar o carrinho em duas abas para manter a simulação de concorrência.
+3. Validar visualmente a tela de produtos com `produto` e `estoque` ativos.
+4. Validar visualmente a tela de pedidos com o serviço `pedido` ativo.
+5. Depois disso, iniciar a implementação do fluxo RabbitMQ.
+
 ### 2026-08-19 - Tela de pedidos usando GET real do serviço pedido
 
 #### Objetivo
