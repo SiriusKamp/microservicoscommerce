@@ -33,6 +33,144 @@ Fluxo desejado nesta etapa:
 
 ## Histórico de mudanças
 
+### 2026-08-24 - Listener e producer RabbitMQ no serviço estoque
+
+#### Objetivo
+
+Implementar apenas o lado do microserviço `estoque` no fluxo RabbitMQ, deixando o listener e producer do microserviço `pedido` para implementação manual posterior.
+
+#### Arquivos alterados
+
+- `estoque/src/main/java/com/cloudcommerce/estoque/repository/EstoqueRepository.java`
+- `estoque/src/main/java/com/cloudcommerce/estoque/service/EstoquePedidoService.java`
+- `estoque/src/main/java/com/cloudcommerce/estoque/messaging/PedidoSolicitadoListener.java`
+- `estoque/src/main/java/com/cloudcommerce/estoque/messaging/EstoqueRespostaProducer.java`
+- `ENSINAR_RABBITMQ.md`
+
+#### O que foi alterado
+
+1. Foi criado `PedidoSolicitadoListener` para consumir mensagens da fila `commerce.pedido.solicitado.queue`.
+2. Foi criado `EstoquePedidoService` para validar o pedido, verificar estoque e reduzir quantidade.
+3. Foi criado `EstoqueRespostaProducer` para publicar `EstoqueRespostaMessage` com routing key `estoque.resposta`.
+4. `EstoqueRepository` recebeu busca com `@Lock(LockModeType.PESSIMISTIC_WRITE)` para bloquear a linha do produto durante a baixa.
+5. O processamento agrupa itens repetidos por `produtoId` antes de verificar estoque.
+6. O listener foi anotado com `@Transactional` para evitar confirmar baixa de estoque se a publicação da resposta falhar.
+7. A resposta do estoque retorna status:
+   - `PROCESSADO`;
+   - `SEM_ESTOQUE`.
+
+#### Observações
+
+O producer e o listener do serviço `pedido` ainda não foram implementados, conforme combinado.
+
+O fluxo atual preparado no estoque é:
+
+```text
+commerce.pedido.solicitado.queue
+-> PedidoSolicitadoListener
+-> EstoquePedidoService
+-> EstoqueRespostaProducer
+-> commerce.pedidos.exchange com routing key estoque.resposta
+```
+
+#### Validação realizada
+
+- `git diff --check` executado sem erros de whitespace.
+- Busca estática confirmou:
+  - `@RabbitListener`;
+  - `RabbitTemplate`;
+  - `convertAndSend`;
+  - `@Transactional`;
+  - `PESSIMISTIC_WRITE`;
+  - status `PROCESSADO` e `SEM_ESTOQUE`.
+
+Não foi possível executar build Maven neste ambiente porque `java` e `mvn` não estão disponíveis no PATH.
+
+### 2026-08-24 - Comentários didáticos na configuração RabbitMQ
+
+#### Objetivo
+
+Adicionar comentários nos arquivos de configuração do RabbitMQ para facilitar o estudo linha a linha.
+
+#### Arquivos alterados
+
+- `pedido/src/main/resources/application.properties`
+- `estoque/src/main/resources/application.properties`
+- `pedido/src/main/java/com/cloudcommerce/pedido/config/RabbitMQConfig.java`
+- `estoque/src/main/java/com/cloudcommerce/estoque/config/RabbitMQConfig.java`
+
+#### O que foi alterado
+
+1. Comentários nos `application.properties` explicando conexão, exchange, filas e routing keys.
+2. Comentários nos `RabbitMQConfig.java` explicando `@Value`, `DirectExchange`, `Queue`, `Binding` e `MessageConverter`.
+3. Comentários curtos nos parâmetros `durable` e `autoDelete` da exchange.
+
+#### Validação realizada
+
+- `git diff --check` executado sem erros de whitespace.
+
+### 2026-08-24 - Configuração inicial do RabbitMQ
+
+#### Objetivo
+
+Iniciar a etapa de mensageria distribuída configurando RabbitMQ nos serviços `pedido` e `estoque`, sem ainda acoplar a regra de negócio de finalizar pedido.
+
+#### Arquivos alterados
+
+- `docker-compose.yml`
+- `ENSINAR_RABBITMQ.md`
+- `pedido/pom.xml`
+- `pedido/src/main/resources/application.properties`
+- `pedido/src/main/java/com/cloudcommerce/pedido/config/RabbitMQConfig.java`
+- `pedido/src/main/java/com/cloudcommerce/pedido/messaging/PedidoSolicitadoMessage.java`
+- `pedido/src/main/java/com/cloudcommerce/pedido/messaging/EstoqueRespostaMessage.java`
+- `estoque/pom.xml`
+- `estoque/src/main/resources/application.properties`
+- `estoque/src/main/java/com/cloudcommerce/estoque/config/RabbitMQConfig.java`
+- `estoque/src/main/java/com/cloudcommerce/estoque/messaging/PedidoSolicitadoMessage.java`
+- `estoque/src/main/java/com/cloudcommerce/estoque/messaging/EstoqueRespostaMessage.java`
+
+#### O que foi alterado
+
+1. Foi criado `docker-compose.yml` com RabbitMQ e painel Management.
+2. Os serviços `pedido` e `estoque` receberam a dependência `spring-boot-starter-amqp`.
+3. Os dois serviços receberam propriedades `spring.rabbitmq.*` com valores padrão locais e suporte a variáveis de ambiente.
+4. Foi criada a exchange `commerce.pedidos.exchange`.
+5. Foram criadas duas filas:
+   - `commerce.pedido.solicitado.queue`;
+   - `commerce.estoque.resposta.queue`.
+6. Foram criadas duas routing keys:
+   - `pedido.solicitado`;
+   - `estoque.resposta`.
+7. Foram criados bindings ligando exchange, filas e routing keys.
+8. Foi configurado `JacksonJsonMessageConverter` para serializar mensagens como JSON.
+9. Foram criados os records de contrato:
+   - `PedidoSolicitadoMessage`;
+   - `EstoqueRespostaMessage`.
+10. Foi criado o documento raiz `ENSINAR_RABBITMQ.md`, explicando cada peça da configuração.
+
+#### Estado atual
+
+O RabbitMQ está configurado, mas o fluxo de negócio ainda não publica nem consome mensagens.
+
+A próxima etapa deve implementar:
+
+1. `pedido` publicando `PedidoSolicitadoMessage`.
+2. `estoque` consumindo a mensagem.
+3. `estoque` respondendo com `EstoqueRespostaMessage`.
+4. `pedido` consumindo a resposta e atualizando o status.
+
+#### Validação realizada
+
+- POMs de `pedido` e `estoque` parseados como XML com sucesso.
+- Busca estática confirmou dependência AMQP, propriedades RabbitMQ, configs e records de mensagem.
+- `git diff --check` executado sem erros de whitespace.
+
+Não foi possível validar neste ambiente:
+
+- `docker compose config`, porque `docker` não está disponível no PATH.
+- build Maven, porque `java` e `mvn` não estão disponíveis no PATH.
+
 ### 2026-08-21 - Toast Bootstrap ao adicionar produto no carrinho
 
 #### Objetivo
