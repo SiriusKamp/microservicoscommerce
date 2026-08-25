@@ -1,4 +1,5 @@
 const CART_STORAGE_KEY = "carrinho";
+const PEDIDO_API_SERVICE = "http://localhost:8084";
 
 
 function obterCarrinho() {
@@ -206,12 +207,15 @@ function removerDoCarrinho(id) {
 }
 
 
-function finalizarPedido() {
+async function finalizarPedido() {
     const carrinho =
         obterCarrinho();
 
     if (carrinho.length === 0) {
-        alert("Seu carrinho está vazio.");
+        mostrarToastCarrinho(
+            "Carrinho vazio",
+            "Adicione produtos antes de finalizar o pedido."
+        );
         return;
     }
 
@@ -219,8 +223,57 @@ function finalizarPedido() {
         return;
     }
 
-    console.log("Pedido:", carrinho);
-    alert("Pedido enviado.");
+    try {
+        const pedido =
+            await criarPedido(carrinho);
+
+        salvarCarrinho([]);
+        carregarCarrinho();
+
+        mostrarToastCarrinho(
+            `Pedido #${pedido.id} criado`,
+            `Status atual: ${pedido.status}.`
+        );
+    } catch (erro) {
+        console.error("Erro ao finalizar pedido:", erro);
+
+        mostrarToastCarrinho(
+            "Pedido não enviado",
+            "Não foi possível criar o pedido agora."
+        );
+    }
+}
+
+
+async function criarPedido(carrinho) {
+    const response =
+        await fetch(
+            `${PEDIDO_API_SERVICE}/pedidos`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(criarPedidoRequest(carrinho))
+            }
+        );
+
+    if (!response.ok) {
+        throw new Error("Erro ao criar pedido");
+    }
+
+    return response.json();
+}
+
+
+function criarPedidoRequest(carrinho) {
+    return {
+        itens: carrinho.map(item => ({
+            produtoId: Number(item.id),
+            quantidade: Number(item.quantidade),
+            precoUnitario: Number(item.preco)
+        }))
+    };
 }
 
 

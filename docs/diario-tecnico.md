@@ -411,3 +411,278 @@ Esse fluxo demonstra melhor o conceito de mensageria distribuída e reduz acopla
 3. Implementar a finalização real do carrinho com POST para o serviço `pedido`.
 4. Definir DTO de criação de pedido para evitar expor diretamente as entidades JPA no contrato da API.
 5. Depois, introduzir RabbitMQ no fluxo de confirmação/reserva de estoque.
+
+---
+
+## 2026-08-25 - POST de pedidos com service e mensagem RabbitMQ
+
+### Objetivo
+
+Criar a camada de service do microservico `pedido` para que o POST de pedidos deixe de salvar a entidade diretamente no controller.
+
+### Arquivos alterados
+
+- `pedido/src/main/java/com/cloudcommerce/pedido/service/PedidoService.java`
+- `pedido/src/main/java/com/cloudcommerce/pedido/controller/PedidoController.java`
+- `pedido/src/main/java/com/cloudcommerce/pedido/dto/CriarPedidoRequest.java`
+- `pedido/src/main/java/com/cloudcommerce/pedido/messaging/PedidoSolicitadoProducer.java`
+- `docs/diario-tecnico.md`
+- `ENSINAR_RABBITMQ.md`
+
+### O que mudou
+
+1. `PedidoService` passou a ser um `@Service` real do Spring.
+2. O POST `/pedidos` agora recebe `CriarPedidoRequest`.
+3. O service cria o `Pedido`, cria os `PedidoItem`, calcula `valorTotal` e salva no banco.
+4. O pedido novo nasce com status `PROCESSANDO`.
+5. Depois de salvar, o service monta uma `PedidoSolicitadoMessage`.
+6. `PedidoSolicitadoProducer` publica a mensagem na exchange usando a routing key `pedido.solicitado`.
+7. O controller retorna `201 Created` com `PedidoResponse`.
+8. Erros simples de entrada retornam `400 Bad Request`.
+
+### Fluxo atual
+
+```text
+POST /pedidos
+-> PedidoController recebe CriarPedidoRequest
+-> PedidoService valida os itens
+-> PedidoService cria Pedido + PedidoItem
+-> PedidoRepository salva no banco
+-> PedidoService cria PedidoSolicitadoMessage
+-> PedidoSolicitadoProducer envia para RabbitMQ
+-> Estoque consome commerce.pedido.solicitado.queue
+```
+
+### Observacao importante
+
+O envio da mensagem ainda acontece logo apos o `save` do pedido. Para um projeto de estudo isso e bom porque deixa o fluxo facil de enxergar. Em sistemas reais, o proximo refinamento seria estudar o Outbox Pattern para evitar inconsistencias entre banco de dados e RabbitMQ.
+
+---
+
+## 2026-08-25 - Preparacao para teste pela tela
+
+### Objetivo
+
+Deixar o fluxo navegavel pelo front para criar pedido real a partir do carrinho.
+
+### Arquivos alterados
+
+- `cloud-commerce/src/main/resources/static/js/app.js`
+- `produto/src/main/java/com/cloudservice/produto/controller/ProdutoController.java`
+- `estoque/src/main/java/com/cloudcommerce/estoque/controller/EstoqueController.java`
+- `docs/diario-tecnico.md`
+
+### O que mudou
+
+1. O carrinho deixou de apenas exibir `alert` e `console.log` ao finalizar.
+2. `finalizarPedido()` agora envia `POST http://localhost:8084/pedidos`.
+3. O front converte os itens do carrinho para o contrato esperado pelo backend:
+
+```json
+{
+  "itens": [
+    {
+      "produtoId": 1,
+      "quantidade": 1,
+      "precoUnitario": 99.9
+    }
+  ]
+}
+```
+
+4. Ao criar o pedido com sucesso, o carrinho e limpo e a tela mostra o status retornado.
+5. `produto` e `estoque` passaram a aceitar chamadas vindas do front em `http://localhost:8081`.
+
+### Estado para teste
+
+Agora ja e possivel testar pela tela ate este ponto:
+
+```text
+front carrinho
+-> POST /pedidos
+-> pedido salvo como PROCESSANDO
+-> mensagem pedido.solicitado enviada ao RabbitMQ
+-> estoque consome a mensagem
+-> estoque baixa quantidade quando houver saldo
+-> estoque publica resposta estoque.resposta
+```
+
+Ainda falta o listener do servico `pedido` para consumir `estoque.resposta` e atualizar o status final para `PROCESSADO` ou `SEM_ESTOQUE`.
+
+### Atualizacao apos implementar o listener do pedido
+
+O arquivo `pedido/src/main/java/com/cloudcommerce/pedido/messaging/EstoqueRespostaListener.java` agora esta conectado ao RabbitMQ com `@RabbitListener`.
+
+Fluxo fechado:
+
+```text
+estoque publica estoque.resposta
+-> RabbitMQ entrega na fila commerce.estoque.resposta.queue
+-> EstoqueRespostaListener consome a mensagem
+-> ListnerService valida pedidoId/status
+-> ListnerService busca o pedido no banco
+-> pedido recebe status PROCESSADO ou SEM_ESTOQUE
+```
+
+Tambem foi criada uma camada separada chamada `ListnerService` para manter o listener pequeno. O listener ficou responsavel por receber a mensagem; o service ficou responsavel pela regra de atualizar o pedido.
+
+### Ajuste antes do teste integrado
+
+O `@Transactional` foi removido do metodo `PedidoService.criar`.
+
+Motivo:
+
+```text
+se o pedido publica mensagem antes do commit do banco,
+o estoque pode responder muito rapido,
+e o listener do pedido pode tentar atualizar um pedido ainda nao visivel no banco
+```
+
+Para esta fase do projeto, o fluxo ficou mais simples:
+
+```text
+PedidoRepository.save(...)
+-> banco confirma o pedido
+-> PedidoSolicitadoProducer publica a mensagem
+```
+
+Em um sistema real, o refinamento recomendado continua sendo estudar Outbox Pattern.
+
+---
+
+## 2026-08-25 - Diagnostico do erro ao atualizar status do pedido
+
+### Sintoma
+
+Durante o teste integrado, o pedido foi criado com status `PROCESSANDO`, o estoque consumiu a mensagem `pedido.solicitado` e publicou a resposta `estoque.resposta`.
+
+Porem, ao consumir a resposta, o servico `pedido` tentou atualizar o pedido para `PROCESSADO` e o banco recusou.
+
+### Erro encontrado
+
+```text
+ERROR: new row for relation "pedidos" violates check constraint "chk_pedido_status"
+Failing row contains (1, PROCESSADO, 99.90, 2026-08-25 16:01:33.322652)
+```
+
+### Causa
+
+A constraint atual do banco permite apenas estes status:
+
+```text
+PENDENTE
+PROCESSANDO
+PAGO
+CONCLUIDO
+ERRO
+```
+
+Mas o fluxo RabbitMQ atual usa:
+
+```text
+PROCESSANDO
+PROCESSADO
+SEM_ESTOQUE
+```
+
+### Consequencia no RabbitMQ
+
+A mensagem `estoque.resposta` nao foi perdida. Ela voltou para a fila `commerce.estoque.resposta.queue` como mensagem pronta para reprocessamento.
+
+### Correcao recomendada
+
+Alinhar a constraint `chk_pedido_status` com os status usados pela aplicacao.
+
+Para manter a linguagem escolhida no projeto, a opcao recomendada e permitir:
+
+```text
+PENDENTE
+PROCESSANDO
+PROCESSADO
+SEM_ESTOQUE
+CANCELADO
+```
+
+---
+
+## 2026-08-25 - Documentacao de apresentacao e AWS
+
+### Objetivo
+
+Criar materiais de estudo e apresentacao para explicar o projeto e preparar a etapa de AWS com ECR e EC2.
+
+### Arquivos criados
+
+- `docs/roteiro-apresentacao-microservicos.md`
+- `docs/trabalho-aws-ecr-ec2.md`
+
+### Conteudo adicionado
+
+1. Roteiro didatico para apresentar o projeto em video.
+2. Explicacao das responsabilidades de front, produto, estoque, pedido e RabbitMQ.
+3. Fluxogramas em Mermaid para o fluxo de pedido e arquitetura.
+4. Documento formal em estilo de trabalho academico.
+5. Registro do estado atual da AWS:
+   - conta criada;
+   - EC2 com 20 GB;
+   - Docker instalado na EC2;
+   - ECR criado;
+   - policy de ECR associada na EC2.
+6. Comandos de virtualizacao no Windows usados para habilitar Docker Desktop.
+7. Comandos de build Maven, Docker build, Docker tag e Docker push para ECR.
+8. Comandos de pull e atualizacao de containers na EC2.
+9. Observacao de que o ECR e um registry, nao um servico de build.
+
+---
+
+## 2026-08-25 - Verificacao de prontidao para teste
+
+### Objetivo
+
+Revisar se os servicos estao coerentes para testar o fluxo atual.
+
+### Resultado
+
+O projeto esta pronto para testar ate o ponto em que o estoque recebe o pedido e publica a resposta.
+
+O ciclo completo de status ainda nao esta fechado porque falta implementar o listener do servico `pedido` que consome `estoque.resposta`.
+
+### Ajustes feitos durante a verificacao
+
+1. `produto` liberou CORS para o front em `http://localhost:8081`.
+2. `estoque` liberou CORS para o front em `http://localhost:8081`.
+3. O carrinho passou a enviar `POST /pedidos` no servico `pedido`.
+4. O JavaScript do carrinho converte `id` e `preco` do localStorage para `produtoId` e `precoUnitario`.
+5. A constante do carrinho foi renomeada para evitar conflito com `pedidos.js`.
+6. `EstoqueRespostaListener.java` deixou de ser um arquivo vazio e virou um placeholder explicito para a proxima etapa.
+
+### Validacoes realizadas
+
+```text
+node --check app.js
+node --check pedidos.js
+node --check estoque.js
+git diff --check
+```
+
+Todas passaram.
+
+### Validacoes bloqueadas no ambiente atual
+
+Nao foi possivel compilar com Maven porque o terminal atual nao tem `JAVA_HOME` configurado.
+
+Tambem nao foi possivel validar Docker/RabbitMQ em execucao porque `docker` nao esta disponivel no PATH deste terminal.
+
+### Ordem recomendada para teste manual
+
+```text
+1. Subir RabbitMQ
+2. Subir produto na porta 8082
+3. Subir estoque na porta 8083
+4. Subir pedido na porta 8084
+5. Subir cloud-commerce na porta 8081
+6. Abrir /estoque e adicionar produto ao carrinho
+7. Abrir /carrinho e finalizar pedido
+8. Conferir /pedidos
+9. Conferir no RabbitMQ se existe mensagem na fila commerce.estoque.resposta.queue
+```

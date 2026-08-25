@@ -588,3 +588,278 @@ E atualizar o status:
 PROCESSADO
 SEM_ESTOQUE
 ```
+
+## Service de criacao de pedido
+
+Arquivo:
+
+```text
+pedido/src/main/java/com/cloudcommerce/pedido/service/PedidoService.java
+```
+
+Responsabilidade:
+
+```text
+Transformar a requisicao HTTP em um pedido salvo no banco e em uma mensagem para o RabbitMQ.
+```
+
+Fluxo dentro do service:
+
+```text
+recebe CriarPedidoRequest
+-> valida se existem itens
+-> cria Pedido com status PROCESSANDO
+-> cria PedidoItem para cada item recebido
+-> calcula valorTotal
+-> salva no banco usando PedidoRepository
+-> cria PedidoSolicitadoMessage
+-> chama PedidoSolicitadoProducer.enviar(...)
+```
+
+O `PedidoItem` precisa receber:
+
+```java
+item.setPedido(pedido);
+```
+
+Isso cria a ligacao em memoria entre:
+
+```text
+Pedido 1 -> muitos PedidoItem
+PedidoItem -> pertence a um Pedido
+```
+
+Sem essa ligacao, o JPA nao sabe qual `pedido_id` deve gravar na tabela `pedido_itens`.
+
+## Producer de pedido solicitado
+
+Arquivo:
+
+```text
+pedido/src/main/java/com/cloudcommerce/pedido/messaging/PedidoSolicitadoProducer.java
+```
+
+Responsabilidade:
+
+```text
+Publicar no RabbitMQ que um pedido foi solicitado.
+```
+
+Configuracao usada:
+
+```text
+exchange: commerce.pedidos.exchange
+routing key: pedido.solicitado
+```
+
+Essa routing key bate com o binding:
+
+```text
+commerce.pedidos.exchange + pedido.solicitado -> commerce.pedido.solicitado.queue
+```
+
+Entao o servico `pedido` nao envia diretamente para o servico `estoque`.
+
+Ele apenas diz ao RabbitMQ:
+
+```text
+publique esta mensagem na exchange commerce.pedidos.exchange com a etiqueta pedido.solicitado
+```
+
+O RabbitMQ usa os bindings criados no `RabbitMQConfig` para entregar na fila correta.
+
+## Listener de resposta no servico pedido
+
+Arquivo:
+
+```text
+pedido/src/main/java/com/cloudcommerce/pedido/messaging/EstoqueRespostaListener.java
+```
+
+Responsabilidade:
+
+```text
+Escutar a fila de respostas do estoque.
+```
+
+Ponto principal:
+
+```java
+@RabbitListener(queues = "${commerce.rabbitmq.queue.estoque-resposta}")
+```
+
+Traducao:
+
+```text
+quando chegar mensagem na fila commerce.estoque.resposta.queue,
+execute este metodo
+```
+
+O listener nao decide status, nao busca banco e nao calcula regra de negocio. Ele apenas recebe a mensagem e chama o service.
+
+Arquivo:
+
+```text
+pedido/src/main/java/com/cloudcommerce/pedido/service/ListnerService.java
+```
+
+Responsabilidade:
+
+```text
+Validar a resposta do estoque e atualizar o status do pedido.
+```
+
+Fluxo:
+
+```text
+recebe EstoqueRespostaMessage
+-> valida se pedidoId existe
+-> valida se status existe
+-> busca Pedido pelo pedidoId
+-> altera pedido.status
+-> salva no banco
+```
+
+Neste projeto, a mensagem de resposta pode alterar o pedido para:
+
+```text
+PROCESSADO
+SEM_ESTOQUE
+```
+
+## Como o front dispara o fluxo
+
+Arquivo:
+
+```text
+cloud-commerce/src/main/resources/static/js/app.js
+```
+
+Quando o usuario finaliza o carrinho, o front envia:
+
+```text
+POST http://localhost:8084/pedidos
+```
+
+O carrinho guarda os produtos no `localStorage` com nomes pensados para tela:
+
+```text
+id
+nome
+preco
+quantidade
+```
+
+Antes de enviar para o backend, o front transforma esses dados no contrato do servico `pedido`:
+
+```text
+produtoId <- id do produto no carrinho
+quantidade <- quantidade escolhida no carrinho
+precoUnitario <- preco do produto no carrinho
+```
+
+Isso gera um JSON com este formato:
+
+```json
+{
+  "itens": [
+    {
+      "produtoId": 1,
+      "quantidade": 1,
+      "precoUnitario": 99.9
+    }
+  ]
+}
+```
+
+O front nao fala com o RabbitMQ.
+
+Quem fala com o RabbitMQ e o backend do servico `pedido`, depois de salvar o pedido no banco.
+
+Fluxo:
+
+```text
+Front
+-> HTTP POST /pedidos
+-> PedidoService salva pedido
+-> PedidoSolicitadoProducer publica mensagem
+-> RabbitMQ roteia para a fila de pedido solicitado
+-> Estoque consome e responde
+```
+
+## Por que publicar depois de salvar
+
+No metodo `PedidoService.criar`, a ordem importa:
+
+```text
+salvar pedido
+-> publicar PedidoSolicitadoMessage
+```
+
+Se a mensagem fosse publicada antes do pedido estar gravado de forma visivel no banco, poderia acontecer esta corrida:
+
+```text
+pedido publica mensagem
+-> estoque consome muito rapido
+-> estoque responde
+-> pedido tenta atualizar status
+-> pedido ainda nao apareceu no banco
+```
+
+Por isso, para o teste atual, primeiro salvamos o pedido e depois enviamos a mensagem.
+
+Em sistemas maiores, esse problema costuma ser tratado com Outbox Pattern.
+
+## Erro de constraint no status do pedido
+
+Durante o teste, o RabbitMQ funcionou:
+
+```text
+pedido publicou pedido.solicitado
+estoque consumiu pedido.solicitado
+estoque publicou estoque.resposta
+pedido recebeu estoque.resposta
+```
+
+O erro apareceu depois disso, no banco de dados do servico `pedido`.
+
+Mensagem principal:
+
+```text
+violates check constraint "chk_pedido_status"
+Failing row contains (..., PROCESSADO, ...)
+```
+
+Traducao:
+
+```text
+o codigo tentou salvar PROCESSADO,
+mas a regra do banco nao permite esse valor
+```
+
+A constraint atual aceita:
+
+```text
+PENDENTE
+PROCESSANDO
+PAGO
+CONCLUIDO
+ERRO
+```
+
+O fluxo atual do projeto usa:
+
+```text
+PROCESSANDO
+PROCESSADO
+SEM_ESTOQUE
+```
+
+Esse e um exemplo importante de contrato entre aplicacao e banco:
+
+```text
+se o Java usa um status,
+o banco tambem precisa aceitar esse status
+```
+
+A mensagem do RabbitMQ voltou para a fila porque o listener falhou antes de confirmar o processamento.
