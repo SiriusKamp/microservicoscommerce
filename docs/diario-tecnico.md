@@ -33,6 +33,74 @@ Fluxo desejado nesta etapa:
 
 ## Histórico de mudanças
 
+### 2026-08-26 - Conexões de banco por variáveis de ambiente
+
+#### Objetivo
+
+Remover credenciais de banco dos arquivos versionáveis e preparar os serviços para gerar imagens Docker destinadas ao Amazon ECR e execução posterior na EC2.
+
+#### Arquivos alterados
+
+- `.gitignore`
+- `produto/src/main/resources/application.properties`
+- `estoque/src/main/resources/application.properties`
+- `pedido/src/main/resources/application.properties`
+- `produto/.env.example`
+- `estoque/.env.example`
+- `pedido/.env.example`
+
+#### Arquivos locais criados e ignorados pelo Git
+
+- `produto/.env`
+- `estoque/.env`
+- `pedido/.env`
+
+#### O que foi alterado
+
+1. Os serviços `produto`, `estoque` e `pedido` passaram a usar:
+   - `DB_URL`;
+   - `DB_USERNAME`;
+   - `DB_PASSWORD`.
+2. Foi adicionado `spring.config.import=optional:file:.env[.properties]` nos três serviços para permitir leitura de `.env` em desenvolvimento local.
+3. Foram criados arquivos `.env.example` sem credenciais reais, servindo como modelo seguro para versionamento.
+4. O `.gitignore` passou a ignorar arquivos `.env`, builds Maven (`target/`) e arquivos locais de IDE.
+
+#### Observação importante
+
+O arquivo `.env` ajuda no desenvolvimento local, mas em Docker/EC2 o mesmo conjunto de variáveis deve ser passado com `--env-file` ou por outro mecanismo de configuração do ambiente. O arquivo `.env` real não deve ser enviado ao Git.
+
+---
+
+### 2026-08-26 - Documento ABNT do trabalho AWS
+
+#### Objetivo
+
+Gerar um documento Word em formato acadêmico ABNT para servir como base editável do trabalho sobre AWS, microserviços, RabbitMQ, Docker, Amazon ECR e Amazon EC2.
+
+#### Arquivos criados
+
+- `docs/trabalho-aws-abnt.docx`
+- `docs/assets/arquitetura-atual.png`
+- `docs/assets/fluxo-pedido-rabbitmq.png`
+- `docs/assets/fluxo-ecr-ec2.png`
+
+#### O que foi incluído
+
+1. Capa e folha de rosto com campos editáveis para instituição, curso, autor, professor e cidade.
+2. Resumo, palavras-chave e sumário em estilo acadêmico.
+3. Introdução, objetivos, fundamentação teórica, metodologia, desenvolvimento, etapa AWS, resultados parciais, próximas etapas e considerações finais.
+4. Figuras explicando a arquitetura atual, o fluxo assíncrono do pedido via RabbitMQ e o fluxo de publicação com ECR e EC2.
+5. Referências formatadas em estilo acadêmico, usando documentação oficial de AWS, Docker, RabbitMQ e Spring AMQP.
+6. Apêndices com comandos de virtualização no Windows, build Maven, Docker build/tag/push, login no ECR, execução na EC2 e atualização de imagem.
+
+#### Validação realizada
+
+O arquivo foi exportado para PDF pelo Microsoft Word e convertido em PNG para revisão visual das 16 páginas. Foram conferidos capa, folha de rosto, resumo, sumário, tabelas, figuras, referências e blocos de comandos.
+
+O renderizador padrão por LibreOffice não estava disponível no ambiente porque o executável `soffice` não foi encontrado; por isso a revisão visual foi feita por Word + PDF + Poppler.
+
+---
+
 ### 2026-08-24 - Listener e producer RabbitMQ no serviço estoque
 
 #### Objetivo
@@ -686,3 +754,24 @@ Tambem nao foi possivel validar Docker/RabbitMQ em execucao porque `docker` nao 
 8. Conferir /pedidos
 9. Conferir no RabbitMQ se existe mensagem na fila commerce.estoque.resposta.queue
 ```
+## 2026-08-26 - Documentacao do fluxo Docker, ECR e execucao local
+
+### Objetivo
+
+Criar documentos para acompanhar a etapa de publicacao em ECR/EC2 e facilitar a avaliacao externa do projeto.
+
+### Arquivos criados
+
+- `docs/passo-a-passo-fluxo-ecr-ec2.md`
+- `docs/guia-execucao-local-professor.md`
+
+### Conteudo adicionado
+
+1. Explicacao de que `docker build` cria uma imagem local.
+2. Registro do fluxo `codigo -> jar -> imagem local -> ECR -> container na EC2`.
+3. Comandos de AWS CLI, ECR, Docker login, Maven package, Docker build, Docker tag, Docker push e Docker run.
+4. Diferenca entre IAM User local para `push` e IAM Role da EC2 para `pull`.
+5. Guia para baixar o projeto, criar arquivos `.env`, subir RabbitMQ e executar os quatro servicos localmente.
+6. Lista de problemas comuns: Docker daemon desligado, Java 21 ausente, jar nao encontrado e APIs fora do ar.
+
+---

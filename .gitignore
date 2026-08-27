@@ -1,0 +1,17 @@
+# Arquivos locais com variaveis de ambiente e segredos.
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Builds Java/Maven.
+**/target/
+
+# IDEs e arquivos locais.
+.idea/
+.vscode/
+*.iml
+
+# Sistema operacional.
+Thumbs.db
+.DS_Store
