@@ -22,6 +22,7 @@ import org.springframework.context.annotation.Configuration;
 // A Queue é onde as mensagens ficam armazenadas até algum serviço consumir.
 // O Binding liga uma Queue a uma Exchange usando uma routing key. Ele responde: "mensagens que chegarem nesta exchange com esta routing key devem ir para esta fila".
 
+
 @Configuration
 public class RabbitMQConfig {
 
