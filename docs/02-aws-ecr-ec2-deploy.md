@@ -1,644 +1,581 @@
-# AWS, ECR e EC2 - Documentacao do fluxo de deploy
+# AWS, ECR, EC2 e Kubernetes - Documentacao do trabalho
 
-Este documento registra o caminho usado para levar o projeto Cloud Commerce do ambiente local para uma infraestrutura inicial na AWS usando EC2, Docker e Amazon ECR.
+Este documento registra a etapa de nuvem do projeto Cloud Commerce, com foco no trabalho de AWS e Kubernetes.
 
-O objetivo atual nao e ter uma arquitetura final de producao, mas sim criar uma base pratica para estudo:
+O trabalho recebido pede demonstrar o fluxo:
 
 ```text
-codigo local
-commit no Git
-build Maven
-imagem Docker local
-push para Amazon ECR
-pull na EC2
-docker run na EC2
+Aplicacao -> Docker -> Registro de imagens -> Amazon EKS -> Deployment -> Service -> Acesso externo
 ```
 
-## 1. Conceitos principais
+Neste projeto, a aplicacao escolhida para o Kubernetes sera o front `cloud-commerce`.
 
-| Conceito | Papel no fluxo |
+Motivo da escolha:
+
+```text
+responde HTTP na porta 8081
+possui interface web
+ja possui Dockerfile
+nao precisa subir banco, RabbitMQ e todos os microservicos para cumprir o desafio
+permite demonstrar ConfigMap, Secret, Deployment, Service, replicas e acesso externo
+```
+
+## 1. Estado atual
+
+O projeto ja possui:
+
+| Item | Estado |
 | --- | --- |
-| Git | Versiona codigo, Dockerfile, documentacao e arquivos `.env.example` |
-| Maven | Gera o `.jar` da aplicacao Java |
-| Docker build | Cria imagem local a partir do `.jar` |
-| Docker tag | Da a imagem local um nome de repositorio remoto |
-| Amazon ECR | Guarda imagens Docker na AWS |
-| Docker push | Envia imagem local para o ECR |
-| EC2 | Servidor Linux onde os containers rodam |
-| Docker pull | Baixa a imagem do ECR na EC2 |
-| Docker run | Cria um container na EC2 |
-| IAM User | Permite que a maquina local publique imagens |
-| IAM Role da EC2 | Permite que a instancia baixe imagens sem guardar chave fixa |
+| Front `cloud-commerce` | Implementado |
+| Dockerfile do front | Implementado |
+| Endpoint `/health` | Implementado e testado |
+| Endpoint `/config` | Implementado e testado |
+| Imagem Docker local `microservicoscommerce-cloud-commerce:v1` | Criada |
+| Repositorio ECR `microservicoscommerce-cloud-commerce` | Criado |
+| Imagem `v1` enviada ao ECR | Validada pelo pull na EC2 |
+| EC2 com Docker | Criada e testada |
+| Container do front na EC2 | Rodando na porta 8081 |
+| Manifestos Kubernetes em `k8s/` | Criados |
+| Cluster EKS | Pendente |
+| Aplicacao no EKS | Pendente |
+| Evidencias finais do Kubernetes | Pendentes |
 
-## 2. Criacao da conta AWS
+## 2. Tecnologias usadas
 
-Primeiro passo:
+| Tecnologia | Uso no projeto |
+| --- | --- |
+| Java 21 | Runtime da aplicacao Spring Boot |
+| Spring Boot 4.1.0 | Front e APIs do projeto |
+| Thymeleaf | Renderizacao das telas do front |
+| Maven | Build do `.jar` |
+| Docker | Criacao e execucao da imagem |
+| Amazon ECR | Registro remoto de imagens Docker |
+| Amazon EC2 | Validacao inicial da imagem em maquina Linux |
+| Amazon EKS | Ambiente Kubernetes a ser usado na proxima etapa |
+| Kubernetes | Orquestracao de Pods, Deployment, Service, ConfigMap e Secret |
+| kubectl | CLI para controlar o cluster Kubernetes |
+| eksctl | CLI sugerida para criar o cluster EKS |
 
-```text
-criar conta AWS
-configurar acesso ao Console AWS
-escolher a regiao de trabalho
-```
+## 3. Endpoints criados para a etapa Kubernetes
 
-Regiao usada no estudo:
+No front `cloud-commerce`, foram criados endpoints simples para facilitar a demonstracao do trabalho.
 
-```text
-sa-east-1
-```
+| Metodo | Endpoint | Objetivo |
+| --- | --- | --- |
+| GET | `/health` | Mostrar que a aplicacao esta no ar |
+| GET | `/config` | Mostrar que ConfigMap e Secret foram injetados |
 
-Essa regiao representa Sao Paulo.
-
-## 3. Criacao do IAM User para uso local
-
-Para usar a AWS CLI no computador local, foi necessario configurar uma identidade IAM.
-
-Fluxo:
-
-```text
-IAM
-Users
-Create user
-criar ou selecionar usuario
-Security credentials
-Create access key
-uso: Command Line Interface
-```
-
-Depois, no PowerShell:
-
-```powershell
-aws configure
-```
-
-Valores informados:
-
-```text
-AWS Access Key ID
-AWS Secret Access Key
-Default region name: sa-east-1
-Default output format: json
-```
-
-Validacao:
-
-```powershell
-aws sts get-caller-identity
-```
-
-Importante:
-
-```text
-Access key e secret key nao devem ir para Git, documento publico, imagem Docker ou e-mail.
-```
-
-## 4. Permissoes do IAM User para publicar no ECR
-
-O usuario IAM local precisa publicar imagens no ECR.
-
-Policy adicionada:
-
-```text
-AmazonEC2ContainerRegistryPowerUser
-```
-
-Tambem foi necessario permitir a criacao de repositorios:
+Resposta esperada de `/health`:
 
 ```json
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ecr:CreateRepository"
-      ],
-      "Resource": "*"
-    }
-  ]
+  "status": "ok",
+  "version": "v1",
+  "application": "cloud-commerce"
 }
 ```
 
-Nome sugerido para a policy:
+Resposta esperada de `/config`:
+
+```json
+{
+  "apiKeyConfigured": true,
+  "ambiente": "demonstracao"
+}
+```
+
+Observacao importante:
 
 ```text
-AllowEcrCreateRepositoryCommerceStudy
+O endpoint /config nao retorna o valor da API_KEY.
+Ele retorna apenas true ou false, provando que a variavel foi recebida sem expor o segredo.
 ```
 
-Sem essas permissoes, erros comuns sao:
+## 4. Arquivos Kubernetes criados
+
+Os manifestos Kubernetes ficam na pasta:
 
 ```text
-ecr:DescribeRepositories nao autorizado
-ecr:CreateRepository nao autorizado
-ecr:InitiateLayerUpload nao autorizado
+k8s/
 ```
 
-## 5. Criacao da instancia EC2
+Arquivos:
 
-Configuracao usada no estudo:
+| Arquivo | Funcao |
+| --- | --- |
+| `k8s/configmap.yaml` | Define variavel nao sensivel `AMBIENTE` |
+| `k8s/secret.yaml` | Define secret ficticia `API_KEY` |
+| `k8s/deployment.yaml` | Cria dois Pods do front |
+| `k8s/service.yaml` | Expoe o front via LoadBalancer |
+
+## 5. ConfigMap
+
+Arquivo:
 
 ```text
-Servico: Amazon EC2
-Sistema: Amazon Linux 2023
-Armazenamento: 20 GB
-Acesso: SSH com chave .pem
-Docker instalado na instancia
+k8s/configmap.yaml
 ```
 
-Ao criar a instancia, foi necessario criar ou selecionar um Key Pair.
-
-O arquivo `.pem` deve ser guardado localmente, por exemplo:
+Funcao:
 
 ```text
-C:\Users\USUARIO\Downloads\cloud-commerce-key.pem
+guardar configuracoes nao sensiveis da aplicacao
 ```
 
-Atencao:
+Valor usado:
 
 ```text
-A AWS so permite baixar a chave privada .pem no momento de criacao do Key Pair.
-Se a chave for perdida, ela nao pode ser baixada novamente.
+AMBIENTE=demonstracao
 ```
 
-## 6. Regras de Security Group
+No Kubernetes, esse valor sera injetado no container e lido pelo endpoint `/config`.
 
-O Security Group controla quais portas podem receber acesso externo.
+## 6. Secret
 
-Para SSH:
+Arquivo:
 
 ```text
-Type: SSH
-Protocol: TCP
-Port: 22
-Source: SEU_IP_PUBLICO/32
+k8s/secret.yaml
 ```
 
-O IP publico local pode ser obtido com:
-
-```powershell
-(Invoke-RestMethod https://checkip.amazonaws.com).Trim()
-```
-
-Para teste das aplicacoes, liberar as portas finais:
+Funcao:
 
 ```text
-8081 -> front
-8082 -> produto
-8083 -> estoque
-8084 -> pedido
+guardar informacoes sensiveis ou simuladas
 ```
 
-Em ambiente de estudo, pode ser usado:
+Valor usado:
 
 ```text
-0.0.0.0/0
+API_KEY=valor-ficticio-nao-utilizar-em-producao
 ```
 
-Observacao:
+Para o trabalho, a secret e ficticia. Nao deve ser usada credencial real.
+
+## 7. Deployment
+
+Arquivo:
 
 ```text
-0.0.0.0/0 significa acesso vindo de qualquer IP.
-Para estudo e aceitavel com cuidado, mas em producao o ideal e restringir acesso e usar load balancer/gateway.
+k8s/deployment.yaml
 ```
 
-RabbitMQ:
+Funcao:
 
 ```text
-5672  -> porta de mensageria usada pelas aplicacoes
-15672 -> painel web administrativo
+dizer ao Kubernetes como executar a aplicacao
 ```
 
-O painel `15672` nao deve ficar aberto ao mundo em ambiente real.
+Configuracoes principais:
 
-## 7. Acesso SSH na EC2
+| Campo | Valor |
+| --- | --- |
+| Nome | `cloud-commerce` |
+| Replicas | `2` |
+| Imagem | `382597877252.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-cloud-commerce:v1` |
+| Porta do container | `8081` |
+| Health check | `/health` |
+| Configuracao | `ConfigMap` + `Secret` |
 
-Formato correto:
+O `Deployment` garante que existam sempre dois Pods rodando. Se um Pod for removido manualmente, o Kubernetes cria outro para voltar ao estado desejado.
 
-```powershell
-ssh -i "C:\CAMINHO\DA\CHAVE.pem" ec2-user@IP_PUBLICO_DA_EC2
-```
+## 8. Service
 
-Exemplo:
-
-```powershell
-ssh -i "C:\Users\sirius.alves\Downloads\cloud-commerce-key.pem" ec2-user@13.220.41.245
-```
-
-Na primeira conexao, o SSH pergunta se deve confiar no host:
+Arquivo:
 
 ```text
-Are you sure you want to continue connecting (yes/no/[fingerprint])?
+k8s/service.yaml
 ```
 
-Responder:
+Funcao:
 
 ```text
-yes
+expor a aplicacao para acesso externo
 ```
 
-Erro comum:
+Configuracoes principais:
+
+| Campo | Valor |
+| --- | --- |
+| Tipo | `LoadBalancer` |
+| Porta externa | `80` |
+| Porta interna | `8081` |
+
+Fluxo esperado:
 
 ```text
-Could not resolve hostname ec2-13.220.41.245
+Usuario -> Load Balancer AWS -> Service Kubernetes -> Pods do cloud-commerce
 ```
 
-Causa:
-
-```text
-foi usado ec2-13.220.41.245 como hostname
-```
-
-Correto:
-
-```text
-ec2-user@13.220.41.245
-```
-
-## 8. IAM Role da EC2
-
-A EC2 deve acessar o ECR sem usar access key fixa.
-
-Para isso, criar ou associar uma IAM Role a instancia.
-
-Role usada no estudo:
-
-```text
-Cloud-Commerce-Container
-```
-
-Permissao necessaria para baixar imagens:
-
-```text
-AmazonEC2ContainerRegistryReadOnly
-```
-
-Validacao dentro da EC2:
-
-```bash
-aws sts get-caller-identity
-```
-
-Resultado esperado:
-
-```text
-arn:aws:sts::<ACCOUNT_ID>:assumed-role/NOME_DA_ROLE/i-...
-```
-
-Isso mostra que a EC2 esta usando role, nao chave manual.
-
-## 9. Criacao dos repositorios ECR
-
-Repositorios criados:
-
-```text
-microservicoscommerce-cloud-commerce
-microservicoscommerce-produto
-microservicoscommerce-estoque
-microservicoscommerce-pedido
-```
-
-Comandos:
-
-```powershell
-aws ecr create-repository --repository-name microservicoscommerce-cloud-commerce --region sa-east-1
-aws ecr create-repository --repository-name microservicoscommerce-produto --region sa-east-1
-aws ecr create-repository --repository-name microservicoscommerce-estoque --region sa-east-1
-aws ecr create-repository --repository-name microservicoscommerce-pedido --region sa-east-1
-```
-
-Validacao:
-
-```powershell
-aws ecr describe-repositories --region sa-east-1 --query "repositories[*].repositoryName" --output table
-```
-
-## 10. Login do Docker no ECR
+## 9. Build local da aplicacao
 
 No computador local:
 
 ```powershell
-aws ecr get-login-password --region sa-east-1 | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.sa-east-1.amazonaws.com
-```
-
-Na EC2:
-
-```bash
-aws ecr get-login-password --region sa-east-1 | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.sa-east-1.amazonaws.com
-```
-
-Resultado esperado:
-
-```text
-Login Succeeded
-```
-
-## 11. Fluxo codigo, commit, build e imagem
-
-Sequencia conceitual:
-
-```text
-alterar codigo
-validar localmente
-commitar no Git
-gerar jar
-criar imagem Docker local
-taguear imagem com versao
-enviar imagem ao ECR
-baixar imagem na EC2
-recriar container
-```
-
-O commit sozinho nao envia imagem ao ECR.
-
-Para envio automatico seria necessario configurar CI/CD:
-
-```text
-GitHub Actions
-GitLab CI
-Jenkins
-```
-
-No estado atual, o fluxo e manual/semi-manual para fins de aprendizado.
-
-## 12. Build Maven
-
-Exemplo com `pedido`:
-
-```powershell
-$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot"
-$env:Path = "$env:JAVA_HOME\bin;$env:Path"
-
-Set-Location "C:\Users\sirius.alves\Projetos\microservicoscommerce\pedido"
+Set-Location "C:\Users\sirius.alves\Projetos\microservicoscommerce\cloud-commerce"
 .\mvnw.cmd clean package -DskipTests
+docker build -t microservicoscommerce-cloud-commerce:v1 .
 ```
 
-O Maven gera:
-
-```text
-target/pedido-0.0.1-SNAPSHOT.jar
-```
-
-## 13. Docker build local
-
-Ainda no diretorio do servico:
+Validar imagem:
 
 ```powershell
-docker build -t microservicoscommerce-pedido .
+docker images microservicoscommerce-cloud-commerce:v1
 ```
 
-Esse comando cria uma imagem local.
+## 10. Teste local com Docker
 
-Validacao:
+Rodar o container local:
 
 ```powershell
-docker images microservicoscommerce-pedido
+docker run -d `
+  --name cloud-commerce-local `
+  -p 8081:8081 `
+  -e AMBIENTE=demonstracao `
+  -e API_KEY=valor-ficticio-nao-utilizar-em-producao `
+  microservicoscommerce-cloud-commerce:v1
 ```
 
-## 14. Docker tag com versao
-
-Como ja havia imagem `1.0` na EC2, a nova versao foi publicada como `2.0`.
-
-Comando:
+Validar:
 
 ```powershell
-docker tag microservicoscommerce-pedido:latest <ACCOUNT_ID>.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-pedido:2.0
+curl http://localhost:8081/health
+curl http://localhost:8081/config
+docker ps
 ```
 
-O nome completo informa ao Docker:
-
-```text
-registry ECR
-repositorio
-tag da imagem
-```
-
-Formato:
-
-```text
-<ACCOUNT_ID>.dkr.ecr.<REGIAO>.amazonaws.com/<REPOSITORIO>:<TAG>
-```
-
-## 15. Docker push para ECR
+Remover container local quando necessario:
 
 ```powershell
-docker push <ACCOUNT_ID>.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-pedido:2.0
+docker rm -f cloud-commerce-local
+```
+
+## 11. Publicacao no ECR
+
+Login no ECR:
+
+```powershell
+$REGISTRY = "382597877252.dkr.ecr.sa-east-1.amazonaws.com"
+
+aws ecr get-login-password --region sa-east-1 | docker login --username AWS --password-stdin $REGISTRY
+```
+
+Tag da imagem:
+
+```powershell
+docker tag microservicoscommerce-cloud-commerce:v1 $REGISTRY/microservicoscommerce-cloud-commerce:v1
+```
+
+Push:
+
+```powershell
+docker push $REGISTRY/microservicoscommerce-cloud-commerce:v1
 ```
 
 Validacao:
 
 ```powershell
 aws ecr describe-images `
-  --repository-name microservicoscommerce-pedido `
+  --repository-name microservicoscommerce-cloud-commerce `
   --region sa-east-1 `
   --query "imageDetails[*].imageTags" `
   --output table
 ```
 
-Resultado esperado:
+## 12. Validacao feita na EC2
 
-```text
-2.0
+A EC2 foi acessada por SSH:
+
+```powershell
+ssh -i "C:\Users\sirius.alves\Downloads\cloud-commerce-key.pem" ec2-user@13.220.41.245
 ```
 
-## 16. Docker pull na EC2
-
-Dentro da EC2:
+Dentro da EC2, foi feito login no ECR:
 
 ```bash
-docker pull <ACCOUNT_ID>.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-pedido:2.0
+aws ecr get-login-password --region sa-east-1 | docker login --username AWS --password-stdin 382597877252.dkr.ecr.sa-east-1.amazonaws.com
 ```
 
-Validar:
+Imagem baixada:
 
 ```bash
-docker images
+docker pull 382597877252.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-cloud-commerce:v1
 ```
 
-## 17. Criar env na EC2
-
-A imagem Docker nao contem as credenciais do banco.
-
-Na EC2, criar um arquivo de ambiente:
+Arquivo de ambiente criado:
 
 ```bash
-nano pedido.env
+nano /home/ec2-user/cloud-commerce.env
 ```
 
-Exemplo sem valores reais:
+Conteudo usado:
 
-```text
-DB_URL=jdbc:postgresql://HOST:5432/NOME_DO_BANCO?sslmode=require
-DB_USERNAME=USUARIO_DO_BANCO
-DB_PASSWORD=SENHA_DO_BANCO
-RABBITMQ_HOST=localhost
-RABBITMQ_PORT=5672
-RABBITMQ_USERNAME=guest
-RABBITMQ_PASSWORD=guest
+```env
+AMBIENTE=demonstracao
+API_KEY=valor-ficticio-nao-utilizar-em-producao
 ```
 
-Arquivos `.env` ou `.env` equivalentes devem ficar na EC2, nao no ECR e nao no Git.
-
-## 18. Docker run na EC2
-
-Rodar container `pedido`:
+Container executado:
 
 ```bash
 docker run -d \
-  --name pedido-service \
-  -p 8084:8084 \
-  --env-file /home/ec2-user/pedido.env \
-  <ACCOUNT_ID>.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-pedido:2.0
+  --name cloud-commerce \
+  --restart unless-stopped \
+  --env-file /home/ec2-user/cloud-commerce.env \
+  -p 8081:8081 \
+  382597877252.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-cloud-commerce:v1
+```
+
+Validacoes feitas:
+
+```bash
+docker ps
+curl http://localhost:8081/health
+curl http://localhost:8081/config
+```
+
+Resultados obtidos:
+
+```json
+{"status":"ok","version":"v1","application":"cloud-commerce"}
+```
+
+```json
+{"apiKeyConfigured":true,"ambiente":"demonstracao"}
+```
+
+Essa validacao comprova:
+
+```text
+a imagem publicada no ECR pode ser baixada pela EC2
+o container inicia corretamente
+a aplicacao responde HTTP
+as variaveis de ambiente sao recebidas no container
+```
+
+## 13. Criacao ou acesso ao EKS
+
+Esta etapa ainda esta pendente.
+
+Comando sugerido para criar o cluster:
+
+```powershell
+eksctl create cluster `
+  --name cloud-commerce-eks `
+  --region sa-east-1 `
+  --nodes 2 `
+  --node-type t3.small
+```
+
+Depois de criado, configurar o `kubectl`:
+
+```powershell
+aws eks update-kubeconfig --region sa-east-1 --name cloud-commerce-eks
 ```
 
 Validar:
 
-```bash
-docker ps
-docker logs pedido-service
+```powershell
+kubectl get nodes
 ```
 
-Se o container cair, verificar logs:
-
-```bash
-docker logs pedido-service
-```
-
-## 19. Parar, iniciar e remover containers
-
-Parar:
-
-```bash
-docker stop pedido-service
-```
-
-Iniciar container existente:
-
-```bash
-docker start pedido-service
-```
-
-Reiniciar:
-
-```bash
-docker restart pedido-service
-```
-
-Remover container parado:
-
-```bash
-docker rm pedido-service
-```
-
-Importante:
+Ponto de atencao:
 
 ```text
-docker stop usa o nome do container
-docker rmi usa o nome da imagem
+EKS, EC2 nodes e LoadBalancer geram custo enquanto estiverem ativos.
 ```
 
-## 20. Atualizar container para uma nova versao
+## 14. Aplicacao dos manifestos no Kubernetes
 
-Exemplo usando tag `3.0`:
+Esta etapa ainda esta pendente.
 
-No local:
+Na raiz do projeto:
 
 ```powershell
-Set-Location "C:\Users\sirius.alves\Projetos\microservicoscommerce\pedido"
-.\mvnw.cmd clean package -DskipTests
-docker build -t microservicoscommerce-pedido .
-docker tag microservicoscommerce-pedido:latest <ACCOUNT_ID>.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-pedido:3.0
-docker push <ACCOUNT_ID>.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-pedido:3.0
+Set-Location "C:\Users\sirius.alves\Projetos\microservicoscommerce"
 ```
 
-Na EC2:
+Aplicar arquivos:
 
-```bash
-docker pull <ACCOUNT_ID>.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-pedido:3.0
-docker stop pedido-service
-docker rm pedido-service
-docker run -d --name pedido-service -p 8084:8084 --env-file /home/ec2-user/pedido.env <ACCOUNT_ID>.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-pedido:3.0
+```powershell
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/secret.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
 ```
 
-## 21. Higienizacao de containers e imagens
+Validar recursos:
 
-Ver containers:
-
-```bash
-docker ps -a
+```powershell
+kubectl get deployments
+kubectl get pods
+kubectl get services
 ```
 
-Ver imagens:
+Ou em um comando:
 
-```bash
-docker images
+```powershell
+kubectl get deployments,pods,services
 ```
 
-Remover containers parados antigos:
+## 15. Acesso externo pelo LoadBalancer
 
-```bash
-docker rm NOME_DO_CONTAINER
+Esta etapa ainda esta pendente.
+
+Buscar o endereco externo:
+
+```powershell
+kubectl get service cloud-commerce
 ```
 
-Remover imagens antigas locais:
+Quando aparecer `EXTERNAL-IP` ou DNS, testar:
 
-```bash
-docker rmi NOME_DA_IMAGEM:TAG
+```powershell
+curl http://EXTERNAL-IP/health
+curl http://EXTERNAL-IP/config
 ```
 
-Exemplo:
-
-```bash
-docker rmi cloudcommerce-pedido:1.0
-```
-
-Isso remove a imagem local da EC2, nao remove a imagem do ECR.
-
-## 22. O que foi feito ate agora
-
-Estado atingido:
+No navegador:
 
 ```text
-AWS CLI funcionando localmente
-usuario IAM com permissao ECR ajustada
-repositorios ECR criados
-Docker local autenticado no ECR
-imagem pedido:2.0 criada localmente
-imagem pedido:2.0 enviada ao ECR
-EC2 acessada via SSH
-EC2 autenticada no ECR usando IAM Role
-imagem pedido:2.0 baixada na EC2
-container pedido-service executado na porta 8084
+http://EXTERNAL-IP/
+http://EXTERNAL-IP/health
+http://EXTERNAL-IP/config
 ```
 
-Ponto de atencao atual:
+## 16. Teste de recuperacao automatica
+
+Esta etapa ainda esta pendente.
+
+Listar Pods:
+
+```powershell
+kubectl get pods
+```
+
+Excluir um Pod:
+
+```powershell
+kubectl delete pod NOME_DO_POD
+```
+
+Acompanhar recriacao:
+
+```powershell
+kubectl get pods -w
+```
+
+Resultado esperado:
 
 ```text
-containers precisam receber --env-file na hora do docker run
+um Pod entra em Terminating
+um novo Pod e criado
+o Deployment volta para 2 replicas
 ```
 
-## 23. O que ainda falta para enriquecer o trabalho
+Esse teste demonstra uma das principais funcoes do Kubernetes: manter o estado desejado da aplicacao.
 
-Proximas melhorias:
+## 17. Evidencias exigidas pelo trabalho
+
+Durante a execucao no EKS, coletar prints ou saidas de comando:
+
+| N | Evidencia | Estado |
+| ---: | --- | --- |
+| 1 | Aplicacao respondendo localmente | Feito |
+| 2 | `docker images` com imagem `v1` | Feito |
+| 3 | `docker ps` com container local ou EC2 | Feito |
+| 4 | ECR mostrando tag `v1` | Feito/validado pelo pull |
+| 5 | `kubectl get nodes` | Pendente |
+| 6 | `kubectl get deployment` com 2 replicas | Pendente |
+| 7 | `kubectl get pods` com dois Pods Running | Pendente |
+| 8 | `kubectl get service` com LoadBalancer | Pendente |
+| 9 | Acesso externo pelo LoadBalancer | Pendente |
+| 10 | `/config` comprovando ConfigMap e Secret | Pendente no EKS |
+| 11 | Exclusao manual de Pod e recriacao automatica | Pendente |
+| 12 | Remocao dos recursos para evitar custo | Pendente |
+
+## 18. Limpeza de recursos
+
+Depois de coletar evidencias, remover os objetos Kubernetes:
+
+```powershell
+kubectl delete -f k8s/service.yaml
+kubectl delete -f k8s/deployment.yaml
+kubectl delete -f k8s/configmap.yaml
+kubectl delete -f k8s/secret.yaml
+```
+
+Depois remover o cluster:
+
+```powershell
+eksctl delete cluster --name cloud-commerce-eks --region sa-east-1
+```
+
+Validar no Console AWS se nao ficaram recursos ativos:
 
 ```text
-criar envs finais na EC2 para pedido, produto e estoque
-publicar imagens 2.0 dos demais servicos
-subir todos os containers na EC2
-criar script de deploy por servico
-criar Docker Compose da EC2 com os quatro servicos
-automatizar build/push com GitHub Actions ou GitLab CI
-automatizar deploy com script, webhook, ECS ou Kubernetes
-adicionar gateway de entrada
-adicionar logs e observabilidade
+EKS cluster
+EC2 nodes
+Load Balancer
+Elastic IP
+Volumes EBS
 ```
 
-## 24. Resumo para apresentacao
+## 19. Estrutura sugerida para entrega final
+
+O documento final pode seguir uma estrutura semelhante ao exemplo enviado:
+
+```text
+Titulo
+Resumo
+Introducao
+Referencial teorico
+Metodologia
+Resultados e evidencias
+Limitacoes, custos e limpeza
+Consideracoes finais
+Referencias
+Anexos com comandos, Dockerfile e YAMLs
+```
+
+Conteudos minimos:
+
+```text
+explicar a aplicacao escolhida
+explicar Dockerfile e imagem Docker
+explicar ECR
+explicar EKS
+explicar Deployment, Pods, Service, ConfigMap e Secret
+mostrar comandos executados
+mostrar evidencias
+mostrar teste de recuperacao de Pod
+mostrar limpeza dos recursos
+```
+
+## 20. Pendencias reais do projeto
+
+Ainda falta executar:
+
+```text
+criar ou acessar cluster EKS
+configurar kubectl
+aplicar manifestos k8s
+testar LoadBalancer
+testar /health e /config pelo endpoint externo
+deletar Pod e comprovar recriacao
+coletar prints e saidas finais
+remover recursos para evitar custo
+montar documento final com evidencias
+```
+
+## 21. Resumo para apresentacao
 
 Resumo falado:
 
 ```text
-O projeto saiu do ambiente local e comecou a ser preparado para deploy em nuvem.
-Foi criada uma estrutura com ECR para armazenar imagens Docker e uma EC2 para executar containers.
-O primeiro deploy manual validado foi do servico pedido na versao 2.0.
-A imagem foi gerada localmente, enviada ao ECR, baixada na EC2 e executada como container.
-As credenciais do banco nao foram colocadas na imagem; elas devem ser fornecidas por variaveis de ambiente na hora do docker run.
+O projeto Cloud Commerce foi preparado para demonstrar deploy em nuvem com Docker, ECR, EC2 e Kubernetes.
+Para a etapa Kubernetes, foi escolhido o front cloud-commerce, pois ele responde HTTP e permite validar acesso externo de forma simples.
+Foram criados endpoints de health check e configuracao para demonstrar que a aplicacao esta ativa e que recebeu variaveis por ConfigMap e Secret.
+A imagem Docker v1 foi criada, publicada no ECR e validada em uma EC2.
+O proximo passo e criar o cluster EKS, aplicar os manifestos Kubernetes e coletar as evidencias exigidas pelo trabalho.
 ```

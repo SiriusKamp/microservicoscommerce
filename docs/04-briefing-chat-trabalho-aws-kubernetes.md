@@ -16,6 +16,7 @@ microservico pedido
 RabbitMQ local
 Dockerfiles nos servicos
 uso inicial de AWS ECR e EC2
+front cloud-commerce:v1 publicado no ECR e validado na EC2
 ```
 
 A etapa RabbitMQ foi finalizada. Agora o foco e o trabalho de AWS/Kubernetes.
@@ -78,9 +79,9 @@ criar uma API simples separada apenas para o trabalho
 
 Isso tambem atende o enunciado, porque a complexidade funcional da aplicacao nao sera avaliada.
 
-## 4. Ajustes recomendados no codigo antes do EKS
+## 4. Ajustes implementados no codigo antes do EKS
 
-Para facilitar a comprovacao de ConfigMap e Secret, adicionar no servico escolhido dois endpoints simples:
+Para facilitar a comprovacao de ConfigMap e Secret, foram adicionados no servico escolhido dois endpoints simples:
 
 | Endpoint | Funcao |
 | --- | --- |
@@ -120,15 +121,15 @@ AMBIENTE=demonstracao
 API_KEY=valor-ficticio-nao-utilizar-em-producao
 ```
 
-## 5. Artefatos Kubernetes a criar
+## 5. Artefatos Kubernetes criados
 
-Criar uma pasta:
+A pasta criada foi:
 
 ```text
 k8s/
 ```
 
-Arquivos esperados:
+Arquivos criados:
 
 ```text
 k8s/configmap.yaml
@@ -400,7 +401,7 @@ O chat orientador deve:
 
 1. Nao tentar subir todos os microservicos de uma vez no EKS.
 2. Priorizar uma aplicacao HTTP simples para cumprir o desafio.
-3. Confirmar se sera usado ECR ou Docker Hub. O enunciado aceita ambos.
+3. Usar ECR como registro de imagens, pois ele ja foi validado no projeto.
 4. Garantir tag clara, como `v1`.
 5. Criar manifestos Kubernetes pequenos e legiveis.
 6. Usar Secret ficticio.
@@ -425,17 +426,15 @@ O chat orientador deve:
 Proximo passo tecnico:
 
 ```text
-adicionar endpoints /health e /config no servico cloud-commerce
+criar ou acessar o cluster EKS e configurar o kubectl
 ```
 
 Depois:
 
 ```text
-buildar imagem v1
-testar localmente
-publicar no ECR
-criar k8s/configmap.yaml
-criar k8s/secret.yaml
-criar k8s/deployment.yaml
-criar k8s/service.yaml
+criar ou acessar o cluster EKS
+configurar kubectl
+aplicar os manifestos da pasta k8s/
+coletar evidencias
+remover os recursos AWS para evitar custos
 ```

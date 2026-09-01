@@ -27,6 +27,9 @@ Imagem Docker do servico pedido publicada no ECR com tag 2.0
 EC2 acessada via SSH
 EC2 autenticada no ECR usando IAM Role
 Imagem pedido:2.0 baixada e executada na EC2
+Front cloud-commerce preparado com /health e /config
+Manifestos Kubernetes criados em k8s/
+Imagem cloud-commerce:v1 publicada no ECR, baixada e validada na EC2
 ```
 
 Ainda nao foi iniciada a etapa Kubernetes/EKS.
@@ -167,6 +170,7 @@ Imagem ja publicada e validada:
 
 ```text
 382597877252.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-pedido:2.0
+382597877252.dkr.ecr.sa-east-1.amazonaws.com/microservicoscommerce-cloud-commerce:v1
 ```
 
 Fluxo ja executado:
@@ -216,15 +220,22 @@ Para a entrega do trabalho, o enunciado pede Secret ficticio, sem credenciais re
 
 ## 9. O que ainda nao existe para Kubernetes
 
-Ainda precisam ser criados:
+Ja foram criados:
 
 ```text
-manifesto Deployment
-manifesto Service LoadBalancer
-manifesto ConfigMap
-manifesto Secret ficticio
+k8s/configmap.yaml
+k8s/secret.yaml
+k8s/deployment.yaml
+k8s/service.yaml
+endpoints /health e /config no front cloud-commerce
+```
+
+Ainda precisam ser feitos:
+
+```text
 cluster Amazon EKS
 configuracao kubectl para acessar o cluster
+aplicacao dos manifestos no cluster
 teste com duas replicas
 teste de exclusao e recriacao automatica de Pod
 evidencias com kubectl get nodes, pods, deployments e services
@@ -232,11 +243,11 @@ documento final com prints/saidas reais
 limpeza dos recursos para evitar custos
 ```
 
-## 10. Recomendacao para a etapa EKS
+## 10. Decisao para a etapa EKS
 
-Para cumprir o trabalho de Kubernetes com menos risco, recomenda-se usar apenas uma aplicacao simples como alvo inicial.
+Para cumprir o trabalho de Kubernetes com menos risco, foi escolhido usar apenas uma aplicacao do projeto como alvo inicial.
 
-Melhor candidato:
+Aplicacao escolhida:
 
 ```text
 cloud-commerce
@@ -276,8 +287,10 @@ Status atual resumido:
 ```text
 RabbitMQ: concluido
 Docker local: iniciado e validado
-ECR: iniciado e validado com pedido:2.0
-EC2: acessada e validada
-EKS/Kubernetes: ainda pendente
-Documentacao AWS/Kubernetes: em preparacao
+ECR: validado com pedido:2.0 e cloud-commerce:v1
+EC2: acessada e validada com container cloud-commerce
+Front para Kubernetes: preparado com /health e /config
+Manifestos Kubernetes: criados
+EKS/Kubernetes: criacao do cluster ainda pendente
+Documentacao AWS/Kubernetes: iniciada
 ```

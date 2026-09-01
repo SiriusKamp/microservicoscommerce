@@ -133,6 +133,11 @@ http://localhost:8081
 
 ## Documentacao
 
+Guias principais:
+
+- [README.md](README.md): execucao local e microservicos.
+- [README-AWS-KUBERNETES.md](README-AWS-KUBERNETES.md): Docker, ECR, EKS e Kubernetes.
+
 Documento principal:
 
 ```text
